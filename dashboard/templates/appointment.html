@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Visit Notes — CareDost</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, sans-serif; background: #f5f5f5; }
+        .navbar { background: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; }
+        .navbar h1 { font-size: 18px; font-weight: 600; }
+        .navbar a { font-size: 13px; color: #666; text-decoration: none; }
+        .container { max-width: 700px; margin: 2rem auto; padding: 0 1.5rem; }
+        .card { background: white; border-radius: 10px; border: 1px solid #eee; padding: 1.5rem; margin-bottom: 1rem; }
+        .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 1rem; }
+        .info-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 0.5rem; }
+        .info-row .label { color: #666; }
+        .info-row .value { font-weight: 500; }
+        label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 0.4rem; color: #333; margin-top: 1rem; }
+        textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; resize: vertical; outline: none; font-family: inherit; }
+        textarea:focus { border-color: #4f46e5; }
+        input[type="date"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; }
+        input[type="date"]:focus { border-color: #4f46e5; }
+        .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; }
+        .btn-primary { background: #4f46e5; color: white; }
+        .btn-primary:hover { background: #4338ca; }
+        .btn-back { background: white; color: #333; border: 1px solid #ddd; margin-right: 8px; text-decoration: none; display: inline-block; }
+        .actions { margin-top: 1.5rem; display: flex; align-items: center; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>🏥 CareDost</h1>
+        <a href="/dashboard">← Back to dashboard</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Patient Info</h2>
+            <div class="info-row">
+                <span class="label">Name</span>
+                <span class="value">{{ patient.name }}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Phone</span>
+                <span class="value">{{ patient.phone }}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Appointment</span>
+                <span class="value">{{ apt.appointment_time.strftime('%d %b %Y, %I:%M %p') }}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Status</span>
+                <span class="value">{{ apt.status }}</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Visit Notes</h2>
+            <form method="POST">
+                <label>Diagnosis / Notes</label>
+                <textarea name="notes" rows="4" placeholder="Patient complaints, diagnosis, observations...">{{ summary.notes if summary else '' }}</textarea>
+
+                <label>Medicines Prescribed</label>
+                <textarea name="medicines" rows="3" placeholder="e.g. Paracetamol 500mg — twice daily for 5 days">{{ summary.medicines if summary else '' }}</textarea>
+
+                <label>Follow-up Date</label>
+                <input type="date" name="follow_up" value="{{ summary.follow_up_date.strftime('%Y-%m-%d') if summary and summary.follow_up_date else '' }}">
+
+                <div class="actions">
+                    <a href="/dashboard" class="btn btn-back">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Save & Mark Complete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

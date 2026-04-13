@@ -1,0 +1,34 @@
+# virtual environment
+venv/
+
+# environment variables (contains your bot token)
+.env
+
+# google auth tokens (contains your google access)
+token.pickle
+credentials.json
+
+# database (local only)
+clinic.db
+
+# python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# mac files
+.DS_Store
+
+# ide files
+.vscode/
+.idea/
+
+# logs
+*.log
+
+# dist
+dist/
+build/
+*.egg-info/
