@@ -56,3 +56,14 @@ def start_scheduler(bot):
         id="reminder_job"
     )
     print("⏰ Reminder scheduler ready.")
+
+def start_medication_scheduler(bot):
+    from bot.notifications import send_medication_reminders
+    scheduler.add_job(
+        send_medication_reminders,
+        trigger="interval",
+        hours=1,
+        args=[bot],
+        id="med_reminder_job"
+    )
+    print("💊 Medication reminder scheduler started.")

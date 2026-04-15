@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from db.database import SessionLocal
-from db.models import Doctor, Patient, Appointment, VisitSummary
+from db.models import Doctor, Patient, Appointment, VisitSummary, MedicationReminder
 from datetime import datetime
 from functools import wraps
 import os
@@ -102,47 +102,132 @@ def dashboard():
 @login_required
 def appointment_detail(apt_id):
     db = SessionLocal()
-    apt = db.query(Appointment).filter(Appointment.id == apt_id).first()
 
-    if not apt:
+    try:
+        apt = db.query(Appointment).filter(Appointment.id == apt_id).first()
+        if not apt:
+            db.close()
+            return redirect(url_for("dashboard"))
+
+        patient_name = apt.patient.name
+        patient_phone = apt.patient.phone
+        patient_telegram_id = apt.patient.telegram_id
+        patient_id = apt.patient_id
+        apt_time = apt.appointment_time
+        apt_status = apt.status
+
+        summary = db.query(VisitSummary).filter(
+            VisitSummary.appointment_id == apt_id
+        ).first()
+
+        summary_data = None
+        if summary:
+            summary_data = {
+                "notes": summary.notes,
+                "medicines": summary.medicines,
+                "follow_up_date": summary.follow_up_date
+            }
+
+    finally:
         db.close()
-        return redirect(url_for("dashboard"))
-
-    patient = db.query(Patient).filter(Patient.id == apt.patient_id).first()
-    summary = db.query(VisitSummary).filter(
-        VisitSummary.appointment_id == apt_id
-    ).first()
 
     if request.method == "POST":
         notes = request.form.get("notes", "")
         medicines = request.form.get("medicines", "")
         follow_up = request.form.get("follow_up", "")
 
-        if summary:
-            summary.notes = notes
-            summary.medicines = medicines
-            if follow_up:
-                summary.follow_up_date = datetime.strptime(follow_up, "%Y-%m-%d")
-        else:
-            summary = VisitSummary(
-                appointment_id=apt_id,
-                notes=notes,
-                medicines=medicines,
-                follow_up_date=datetime.strptime(follow_up, "%Y-%m-%d") if follow_up else None
-            )
-            db.add(summary)
+        db = SessionLocal()
+        try:
+            existing = db.query(VisitSummary).filter(
+                VisitSummary.appointment_id == apt_id
+            ).first()
 
-        apt.status = "completed"
-        db.commit()
-        db.close()
+            follow_up_date = datetime.strptime(follow_up, "%Y-%m-%d") if follow_up else None
+
+            if existing:
+                existing.notes = notes
+                existing.medicines = medicines
+                existing.follow_up_date = follow_up_date
+            else:
+                new_summary = VisitSummary(
+                    appointment_id=apt_id,
+                    notes=notes,
+                    medicines=medicines,
+                    follow_up_date=follow_up_date
+                )
+                db.add(new_summary)
+
+            apt = db.query(Appointment).filter(Appointment.id == apt_id).first()
+            apt.status = "completed"
+
+            # parse and save medication reminders
+            if medicines:
+                from datetime import timedelta
+                # deactivate old reminders for this patient
+                db.query(MedicationReminder).filter(
+                    MedicationReminder.patient_id == patient_id,
+                    MedicationReminder.active == True
+                ).update({"active": False})
+
+                # parse medicines — each line is one medicine
+                for line in medicines.strip().split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    # detect timing keywords
+                    timings = []
+                    line_lower = line.lower()
+                    if any(w in line_lower for w in ["morning", "subah", "am"]):
+                        timings.append("morning")
+                    if any(w in line_lower for w in ["afternoon", "dopahar", "noon"]):
+                        timings.append("afternoon")
+                    if any(w in line_lower for w in ["evening", "shaam", "pm"]):
+                        timings.append("evening")
+                    if any(w in line_lower for w in ["night", "raat", "bedtime"]):
+                        timings.append("night")
+                    if not timings:
+                        timings = ["morning", "night"]  # default twice daily
+
+                    for timing in timings:
+                        reminder = MedicationReminder(
+                            patient_id=patient_id,
+                            medicine_name=line,
+                            timing=timing,
+                            start_date=datetime.now(),
+                            end_date=datetime.now() + timedelta(days=7),
+                            active=True
+                        )
+                        db.add(reminder)
+
+            db.commit()
+
+            # store apt_id for async notification
+            saved_apt_id = apt_id
+
+        finally:
+            db.close()
+
+        # send telegram notification async
+        import asyncio
+        from bot.notifications import notify_patient_visit_complete
+        from main import get_bot
+
+        try:
+            bot = get_bot()
+            asyncio.run(notify_patient_visit_complete(bot, saved_apt_id))
+        except Exception as e:
+            print(f"Notification error: {e}")
+
         return redirect(url_for("dashboard"))
 
-    db.close()
     return render_template("appointment.html",
-        apt=apt,
-        patient=patient,
-        summary=summary
+        apt={"id": apt_id, "time": apt_time, "status": apt_status},
+        patient={"name": patient_name, "phone": patient_phone},
+        summary=summary_data
     )
+
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

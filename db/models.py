@@ -43,3 +43,16 @@ class VisitSummary(Base):
     medicines = Column(Text)
     follow_up_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    appointment = relationship("Appointment", backref="summary")
+
+class MedicationReminder(Base):
+    __tablename__ = "medication_reminders"
+
+    id = Column(Integer, primary_key=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    medicine_name = Column(String)
+    timing = Column(String)  # morning, afternoon, evening, night
+    start_date = Column(DateTime)
+    end_date = Column(DateTime)
+    active = Column(Boolean, default=True)
+    patient = relationship("Patient", backref="reminders")

@@ -24,8 +24,15 @@ def seed_doctor():
         print("Doctor seeded.")
     db.close()
 
+def get_bot():
+    from telegram import Bot
+    import os
+    return Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+
 async def post_init(application):
     start_scheduler(application.bot)
+    from scheduler.reminders import start_medication_scheduler
+    start_medication_scheduler(application.bot)
     scheduler.start()
     print("⏰ Reminder scheduler started.")
 
