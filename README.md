@@ -4,7 +4,7 @@ A Telegram-based clinic management system that automates appointment booking, pa
 
 ---
 
-## 🚀 Overview
+##  Overview
 
 CareDost eliminates the need for phone calls, paper registers, and manual follow-ups.
 
@@ -23,7 +23,7 @@ Doctors get:
 
 ---
 
-## ✨ Key Features
+##  Key Features
 
 ### Patient Experience (Telegram Bot)
 
@@ -44,7 +44,7 @@ Doctors get:
 
 ---
 
-## 🧠 System Design Highlights
+##  System Design Highlights
 
 * Event-driven architecture for reminders and notifications
 * Calendar synchronization to avoid double-booking
@@ -54,7 +54,7 @@ Doctors get:
 
 ---
 
-## 🛠 Tech Stack
+##  Tech Stack
 
 | Layer       | Technology                   |
 | ----------- | ---------------------------- |
@@ -66,7 +66,7 @@ Doctors get:
 
 ---
 
-## 📦 Project Structure
+##  Project Structure
 
 ```
 clinic-bot/
@@ -79,7 +79,7 @@ clinic-bot/
 
 ---
 
-## ⚙️ Setup (Quick Start)
+##  Setup (Quick Start)
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/caredost.git
@@ -107,7 +107,7 @@ python -m dashboard.app
 ---
 
 
-## 🔄 Production Improvements (Planned)
+##  Production Improvements (Planned)
 
 * PostgreSQL instead of SQLite
 * Webhooks instead of polling
