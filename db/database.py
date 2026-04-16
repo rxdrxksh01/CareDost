@@ -19,6 +19,6 @@ def get_db():
         db.close()
 
 def init_db():
-    from db.models import Doctor, Patient, Appointment, VisitSummary
+    from db.models import Doctor, Patient, Appointment, VisitSummary, MedicationReminder, PreVisitForm
     Base.metadata.create_all(bind=engine)
     print("Database initialized.")

@@ -126,9 +126,25 @@ def book_slot_on_calendar(apt_time: datetime, patient_name: str, doctor_name: st
                 "timeZone": "Asia/Kolkata"
             }
         }
-        service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-        logger.info(f"Calendar event created for {patient_name} at {apt_time}")
-        return True
+        result = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+        event_id = result.get("id")
+        logger.info(f"Calendar event {event_id} created for {patient_name} at {apt_time}")
+        return event_id
     except Exception as e:
         logger.error(f"Failed to create calendar event: {e}")
+        return None
+
+def delete_event_from_calendar(event_id: str):
+    if not event_id:
+        return False
+    try:
+        service = get_calendar_service()
+        service.events().delete(calendarId=CALENDAR_ID, eventId=event_id).execute()
+        logger.info(f"Calendar event {event_id} deleted successfully.")
+        return True
+    except Exception as e:
+        # Ignore 410 Gone (already deleted) or 404
+        if "410" in str(e) or "404" in str(e):
+            return True
+        logger.error(f"Failed to delete calendar event {event_id}: {e}")
         return False

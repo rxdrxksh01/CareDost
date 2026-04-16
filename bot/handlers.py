@@ -182,14 +182,24 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
 
                 text = "📋 *Your Upcoming Appointments:*\n\n"
+                from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+                keyboard = []
+
                 for i, apt in enumerate(appointments, 1):
                     text += (
                         f"{i}. 📅 {apt.appointment_time.strftime('%d %b %Y')}\n"
                         f"   🕐 {apt.appointment_time.strftime('%I:%M %p')}\n"
                         f"   🔔 Reminder: {'Sent ✅' if apt.reminder_sent else 'Pending ⏳'}\n\n"
                     )
+                    keyboard.append([InlineKeyboardButton(f"❌ Cancel Session #{i}", callback_data=f"cancel_apt_{apt.id}")])
 
-                await query.edit_message_text(text, parse_mode="Markdown")
+                keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="start")])
+
+                await query.edit_message_text(
+                    text, 
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
 
             finally:
                 db.close()
@@ -209,11 +219,31 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Cancelled. Send /start to start again."
             )
 
+        elif query.data.startswith("cancel_apt_"):
+            apt_id = int(query.data.replace("cancel_apt_", ""))
+            db = SessionLocal()
+            try:
+                apt_to_cancel = db.query(Appointment).filter(Appointment.id == apt_id).first()
+                if apt_to_cancel:
+                    apt_to_cancel.status = "cancelled"
+                    if apt_to_cancel.calendar_event_id:
+                        from bot.calendar_service import delete_event_from_calendar
+                        delete_event_from_calendar(apt_to_cancel.calendar_event_id)
+                    db.commit()
+                    await query.edit_message_text(
+                        " Appointment has been successfully cancelled and removed from the calendar.\n\n"
+                        "Send /start to go back to the menu."
+                    )
+                else:
+                    await query.edit_message_text(" Appointment not found.")
+            finally:
+                db.close()
+
     except Exception as e:
         logger.error(f"Error in menu_callback: {e}")
         try:
             await query.edit_message_text(
-                "⚠️ Something went wrong. Send /start to try again."
+                " Something went wrong. Send /start to try again."
             )
         except Exception:
             pass
@@ -249,7 +279,7 @@ async def slot_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in slot_selected: {e}")
         await query.edit_message_text(
-            "⚠️ Something went wrong. Send /start to try again."
+            " Something went wrong. Send /start to try again."
         )
 
 # ── confirm booking ───────────────────────────────────────
@@ -264,21 +294,21 @@ async def confirm_slot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not patient:
             await query.edit_message_text(
-                "⚠️ Account not found. Send /start to register first."
+                " Account not found. Send /start to register first."
             )
             return
 
         doctor = get_doctor(db)
         if not doctor:
             await query.edit_message_text(
-                "⚠️ No doctor available right now. Please contact the clinic directly."
+                " No doctor available right now. Please contact the clinic directly."
             )
             return
 
         selected = context.user_data.get("selected_slot")
         if not selected:
             await query.edit_message_text(
-                "⚠️ Slot data lost. Send /start and book again."
+                "Session expired. Please send /start and book again."
             )
             return
 
@@ -310,7 +340,10 @@ async def confirm_slot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.commit()
         try:
             from bot.calendar_service import book_slot_on_calendar
-            book_slot_on_calendar(apt_time, patient.name, doctor_name)
+            event_id = book_slot_on_calendar(apt_time, patient.name, doctor_name)
+            if event_id:
+                appointment.calendar_event_id = event_id
+                db.commit()
         except Exception as e:
             logger.error(f"Calendar booking failed: {e}")
 
@@ -321,6 +354,18 @@ async def confirm_slot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"I'll remind you 2 hours before. 🔔",
             parse_mode="Markdown"
         )
+        # Clear selected slot so they can't double-confirm
+        context.user_data.pop("selected_slot", None)
+
+        # send pre-visit questionnaire immediately
+        try:
+            from bot.pre_visit import send_pre_visit_questionnaire
+            apt_id = appointment.id
+            appointment.questionnaire_sent = True
+            db.commit()
+            await send_pre_visit_questionnaire(context.bot, apt_id)
+        except Exception as e:
+            logger.error(f"Failed to send pre-visit questionnaire: {e}")
 
     except Exception as e:
         logger.error(f"Error in confirm_slot: {e}")
@@ -409,3 +454,55 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Cancelled. Send /start to start again."
     )
     return ConversationHandler.END
+
+async def patient_reply_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # This handler catches any text not caught by Pre-Visit or ConversationHandler
+    if not update.message or not update.message.text:
+        return
+
+    # Check if we are in Pre-Visit mode - if so, don't double process
+    if context.user_data.get("pv_typing_for_apt"):
+        return
+
+    text = update.message.text.strip()
+    telegram_id = str(update.effective_user.id)
+    
+    from db.database import SessionLocal
+    from db.models import Patient, PatientMessage
+    
+    db = SessionLocal()
+    try:
+        patient = db.query(Patient).filter(Patient.telegram_id == telegram_id).first()
+        
+        if patient:
+            # Check for credits
+            if patient.reply_credits > 0:
+                patient.reply_credits -= 1
+            elif patient.initiation_credits > 0:
+                patient.initiation_credits -= 1
+            else:
+                await update.message.reply_text(
+                    "You've reached your free message limit. 📩\n\n"
+                    "The doctor will see your previous messages during your visit. "
+                    "You can still book new slots if needed!"
+                )
+                return
+
+            # Save the message
+            new_msg = PatientMessage(
+                patient_id=patient.id,
+                message=text,
+                direction="from_patient"
+            )
+            db.add(new_msg)
+            db.commit()
+            
+            await update.message.reply_text("Thanks! I've forwarded your message to Dr. Sharma. 🙏")
+        else:
+            # If unknown user, just give start prompt
+            await update.message.reply_text("Welcome to CareDost! Please type /start to book an appointment.")
+            
+    except Exception as e:
+        logger.error(f"Error in patient_reply_handler: {e}")
+    finally:
+        db.close()

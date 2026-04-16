@@ -83,12 +83,37 @@
                         <div class="name">{{ apt.patient_name }}</div>
                         <div class="time">{{ apt.time }} · {{ apt.patient_phone }}</div>
                     </div>
-                    <span class="badge badge-green">Upcoming</span>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <span class="badge badge-green">Upcoming</span>
+                        <a href="/appointment/{{ apt.id }}" class="btn" style="background:#f3f4f6; color:#374151; border:1px solid #e5e7eb;">View / Cancel</a>
+                    </div>
                 </div>
                 {% endfor %}
             {% else %}
                 <div class="empty">No upcoming appointments</div>
             {% endif %}
+        </div>
+
+        <div class="section" style="border: 2px solid #3b82f6; margin-top: 2rem;">
+            <div class="section-header" style="background:#eff6ff; color:#1e3a8a;">📢 Broadcast Announcement to Targeted Patients</div>
+            <div style="padding: 1.5rem;">
+                <form method="POST" action="/broadcast">
+                    <div style="margin-bottom: 1rem;">
+                        <label for="target_date" style="font-size: 14px; font-weight: 500; display: block; margin-bottom: 0.4rem; color: #333;">Select Target Date:</label>
+                        <input type="date" id="target_date" name="target_date" style="padding: 8px 12px; border: 1px solid #bfdbfe; border-radius: 8px; font-size: 14px; outline: none;" required>
+                    </div>
+                    <textarea name="message" rows="3" style="width: 100%; padding: 10px; border: 1px solid #bfdbfe; border-radius: 8px; font-size: 14px; outline: none; resize: vertical;" placeholder="Type your announcement to patients booked for the selected date..." required></textarea>
+                    
+                    <div style="margin-top: 0.75rem; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="is_cancellation" name="is_cancellation" style="width: 16px; height: 16px; cursor: pointer;">
+                        <label for="is_cancellation" style="font-size: 14px; color: #ef4444; font-weight: 500; cursor: pointer; margin-top: 0;">🚨 Mass Cancellation (Cancels all today's slots + Removes from Calendar + Asks them to Reschedule)</label>
+                    </div>
+
+                    <div style="margin-top: 1rem; text-align: right;">
+                        <button type="submit" class="btn" style="background: #3b82f6; color: white; padding: 10px 20px;">Send Broadcast</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </body>

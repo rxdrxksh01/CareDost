@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from db.database import SessionLocal
-from db.models import Doctor, Patient, Appointment, VisitSummary, MedicationReminder
+from db.models import Doctor, Patient, Appointment, VisitSummary, MedicationReminder, PreVisitForm, PatientMessage
 from datetime import datetime
 from functools import wraps
 import os
@@ -121,11 +121,29 @@ def appointment_detail(apt_id):
         ).first()
 
         summary_data = None
+        # Fetch chat history
+        chat_history = db.query(PatientMessage).filter(PatientMessage.patient_id == patient_id).order_by(PatientMessage.created_at).all()
+
         if summary:
             summary_data = {
                 "notes": summary.notes,
                 "medicines": summary.medicines,
                 "follow_up_date": summary.follow_up_date
+            }
+
+        # fetch pre-visit form
+        pre_visit = db.query(PreVisitForm).filter(
+            PreVisitForm.appointment_id == apt_id
+        ).first()
+
+        pre_visit_data = None
+        if pre_visit:
+            pre_visit_data = {
+                "main_problem": pre_visit.main_problem,
+                "duration": pre_visit.duration,
+                "severity": pre_visit.severity,
+                "taking_medicine": pre_visit.taking_medicine,
+                "extra_notes": pre_visit.extra_notes
             }
 
     finally:
@@ -138,6 +156,14 @@ def appointment_detail(apt_id):
 
         db = SessionLocal()
         try:
+            apt = db.query(Appointment).filter(Appointment.id == apt_id).first()
+            if not apt:
+                db.close()
+                return redirect(url_for("dashboard"))
+                
+            patient_id = apt.patient_id
+            patient_name = apt.patient.name
+            
             existing = db.query(VisitSummary).filter(
                 VisitSummary.appointment_id == apt_id
             ).first()
@@ -156,6 +182,47 @@ def appointment_detail(apt_id):
                     follow_up_date=follow_up_date
                 )
                 db.add(new_summary)
+            
+            # --- PHASE 2: AUTOMATIC RE-VISIT ---
+            if follow_up_date:
+                # Check if a scheduled revisit already exists for this date to avoid duplicates
+                from datetime import time
+                revisit_start = datetime.combine(follow_up_date.date(), time(0, 0))
+                revisit_end = datetime.combine(follow_up_date.date(), time(23, 59))
+                
+                existing_revisit = db.query(Appointment).filter(
+                    Appointment.patient_id == patient_id,
+                    Appointment.appointment_time >= revisit_start,
+                    Appointment.appointment_time <= revisit_end,
+                    Appointment.status == "scheduled"
+                ).first()
+
+                if not existing_revisit:
+                    # Create new appointment at default 10:00 AM
+                    revisit_time = datetime.combine(follow_up_date.date(), time(10, 0))
+                    new_apt = Appointment(
+                        doctor_id=session["doctor_id"],
+                        patient_id=patient_id,
+                        appointment_time=revisit_time,
+                        status="scheduled"
+                    )
+                    db.add(new_apt)
+                    db.flush() # get new_apt.id
+
+                    # Sync to Calendar
+                    from bot.calendar_service import book_slot_on_calendar
+                    doctor_name = db.query(Doctor).filter(Doctor.id == session["doctor_id"]).first().name
+                    calendar_id = book_slot_on_calendar(revisit_time, patient_name, doctor_name)
+                    if calendar_id:
+                        new_apt.calendar_event_id = calendar_id
+                        
+                    # Queue notification data
+                    revisit_apt_id = new_apt.id
+                else:
+                    revisit_apt_id = None
+            else:
+                revisit_apt_id = None
+            # -----------------------------------
 
             apt = db.query(Appointment).filter(Appointment.id == apt_id).first()
             apt.status = "completed"
@@ -216,6 +283,11 @@ def appointment_detail(apt_id):
         try:
             bot = get_bot()
             asyncio.run(notify_patient_visit_complete(bot, saved_apt_id))
+            
+            # Notify about revisit if scheduled
+            if 'revisit_apt_id' in locals() and revisit_apt_id:
+                from bot.notifications import notify_patient_revisit
+                asyncio.run(notify_patient_revisit(bot, revisit_apt_id))
         except Exception as e:
             print(f"Notification error: {e}")
 
@@ -224,10 +296,155 @@ def appointment_detail(apt_id):
     return render_template("appointment.html",
         apt={"id": apt_id, "time": apt_time, "status": apt_status},
         patient={"name": patient_name, "phone": patient_phone},
-        summary=summary_data
+        summary=summary_data,
+        pre_visit=pre_visit_data,
+        messages=chat_history
     )
 
+@app.route("/api/expand_notes", methods=["POST"])
+@login_required
+def expand_notes():
+    data = request.json
+    shorthand = data.get("text", "").strip()
+    
+    if not shorthand:
+        return jsonify({"expanded": ""})
 
+    from groq import Groq
+    try:
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "You are a clinical AI assistant. Your task is to expand medical shorthand into professional paragraphs. RULES: 1. Keep it very brief (strictly 3-4 lines max). 2. DO NOT suggest, guess, or name any diseases or infections unless the doctor specifically provides them. 3. Only expand the shorthand provided into clear language. 4. Use a professional and sympathetic tone."},
+                {"role": "user", "content": f"Expand this shorthand: {shorthand}"}
+            ],
+            temperature=0.7,
+            max_tokens=500
+        )
+        expanded = completion.choices[0].message.content
+        return jsonify({"expanded": expanded})
+    except Exception as e:
+        print(f"Groq error: {e}")
+        return jsonify({"expanded": shorthand, "error": str(e)})
+
+
+@app.route("/appointment/<int:apt_id>/cancel", methods=["POST"])
+@login_required
+def cancel_appointment(apt_id):
+    db = SessionLocal()
+    patient_id = None
+    apt_time = None
+    doctor_name = None
+
+    try:
+        apt_to_cancel = db.query(Appointment).filter(Appointment.id == apt_id).first()
+        if apt_to_cancel:
+            patient_id = apt_to_cancel.patient.telegram_id
+            apt_time = apt_to_cancel.appointment_time
+            doctor_name = apt_to_cancel.doctor.name
+            
+            apt_to_cancel.status = "cancelled"
+            if apt_to_cancel.calendar_event_id:
+                from bot.calendar_service import delete_event_from_calendar
+                delete_event_from_calendar(apt_to_cancel.calendar_event_id)
+            db.commit()
+    finally:
+        db.close()
+
+    if patient_id and apt_time and doctor_name:
+        import asyncio
+        from bot.notifications import notify_patient_cancellation
+        from main import get_bot
+        try:
+            bot = get_bot()
+            asyncio.run(notify_patient_cancellation(bot, patient_id, apt_time, doctor_name))
+        except Exception as e:
+            print(f"Cancellation notification error: {e}")
+
+    return redirect(url_for("dashboard"))
+@app.route("/appointment/<int:apt_id>/message", methods=["POST"])
+@login_required
+def send_direct_message_route(apt_id):
+    message = request.form.get("message", "").strip()
+    if not message:
+        return redirect(url_for("appointment_detail", apt_id=apt_id))
+        
+    db = SessionLocal()
+    try:
+        apt = db.query(Appointment).filter(Appointment.id == apt_id).first()
+        if apt:
+            patient_id = apt.patient.telegram_id
+            doctor_name = apt.doctor.name
+            
+            import asyncio
+            from bot.notifications import send_direct_message
+            from main import get_bot
+            
+            try:
+                bot = get_bot()
+                asyncio.run(send_direct_message(bot, patient_id, message, doctor_name))
+            except Exception as e:
+                print(f"Message send error: {e}")
+    finally:
+        db.close()
+        
+    return redirect(url_for("appointment_detail", apt_id=apt_id))
+
+@app.route("/broadcast", methods=["POST"])
+@login_required
+def send_broadcast_route():
+    message = request.form.get("message", "").strip()
+    target_date_str = request.form.get("target_date")
+    is_cancellation = request.form.get("is_cancellation") == "on"
+    
+    if not message or not target_date_str:
+        return redirect(url_for("dashboard"))
+        
+    db = SessionLocal()
+    try:
+        try:
+            target_date = datetime.strptime(target_date_str, "%Y-%m-%d")
+        except ValueError:
+            target_date = datetime.now()
+            
+        day_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        target_apts = db.query(Appointment).filter(
+            Appointment.appointment_time >= day_start,
+            Appointment.appointment_time <= day_end,
+            Appointment.status == "scheduled"
+        ).all()
+        
+        telegram_ids = []
+        for apt in target_apts:
+            if apt.patient.telegram_id and apt.patient.telegram_id not in telegram_ids:
+                telegram_ids.append(apt.patient.telegram_id)
+                
+            if is_cancellation:
+                apt.status = "cancelled"
+                if apt.calendar_event_id:
+                    from bot.calendar_service import delete_event_from_calendar
+                    delete_event_from_calendar(apt.calendar_event_id)
+        
+        if is_cancellation:
+            db.commit()
+        
+        if telegram_ids:
+            import asyncio
+            from bot.notifications import send_broadcast_message
+            from main import get_bot
+            
+            try:
+                bot = get_bot()
+                asyncio.run(send_broadcast_message(bot, telegram_ids, message, is_cancellation))
+            except Exception as e:
+                print(f"Broadcast error: {e}")
+    finally:
+        db.close()
+        
+    return redirect(url_for("dashboard"))
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=8000)

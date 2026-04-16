@@ -67,3 +67,38 @@ def start_medication_scheduler(bot):
         id="med_reminder_job"
     )
     print("💊 Medication reminder scheduler started.")
+
+async def send_pre_visit_questionnaires(bot):
+    from bot.pre_visit import send_pre_visit_questionnaire
+    db = SessionLocal()
+    try:
+        now = datetime.now()
+        window = now + timedelta(hours=1)
+
+        appointments = db.query(Appointment).filter(
+            Appointment.status == "scheduled",
+            Appointment.questionnaire_sent == False,
+            Appointment.appointment_time >= now,
+            Appointment.appointment_time <= window + timedelta(minutes=5)
+        ).all()
+
+        for apt in appointments:
+            try:
+                await send_pre_visit_questionnaire(bot, apt.id)
+                apt.questionnaire_sent = True
+                db.commit()
+                print(f"📋 Pre-visit questionnaire sent for appointment {apt.id}")
+            except Exception as e:
+                print(f"Failed to send pre-visit questionnaire: {e}")
+    finally:
+        db.close()
+
+def start_pre_visit_scheduler(bot):
+    scheduler.add_job(
+        send_pre_visit_questionnaires,
+        trigger="interval",
+        minutes=30,
+        args=[bot],
+        id="pre_visit_job"
+    )
+    print("📋 Pre-visit questionnaire scheduler ready.")
