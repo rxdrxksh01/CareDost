@@ -470,9 +470,10 @@ async def patient_reply_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if not update.message or not update.message.text:
         return
 
-    # Check if we are in Pre-Visit mode - if so, don't double process
+    # Check if we are in Pre-Visit mode - if so, delegate to the pre-visit handler
     if context.user_data.get("pv_typing_for_apt"):
-        return
+        from bot.pre_visit import pv_free_text_handler
+        return await pv_free_text_handler(update, context)
 
     text = update.message.text.strip()
     telegram_id = str(update.effective_user.id)
