@@ -79,10 +79,11 @@ def main():
     app.add_handler(CallbackQueryHandler(pv_redo_callback, pattern="^pv_redo_"))
     app.add_handler(CallbackQueryHandler(menu_callback))
     # free-text handler for pre-visit notes (must be after conv_handler)
-    from bot.handlers import patient_reply_handler
+    from bot.handlers import patient_reply_handler, patient_media_handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, pv_free_text_handler))
-    # Put patient replies in a separate group so they are caught even if other handlers run
+    # Put patient replies and media in a separate group so they are caught even if other handlers run
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, patient_reply_handler), group=2)
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, patient_media_handler), group=2)
 
     print("🚀 CareDost bot is running...")
     app.run_polling()

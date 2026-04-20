@@ -43,7 +43,9 @@ class PatientMessage(Base):
     
     id = Column(Integer, primary_key=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
-    message = Column(Text, nullable=False)
+    message = Column(Text, nullable=True) # Allowed to be null if it's just a file
+    file_path = Column(String, nullable=True)
+    is_image = Column(Boolean, default=False)
     direction = Column(String, nullable=False) # 'to_patient' or 'from_patient'
     created_at = Column(DateTime, default=datetime.utcnow)
     
