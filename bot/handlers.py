@@ -43,6 +43,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = SessionLocal()
 
     try:
+        # Clear leftover pre-visit state
+        context.user_data.pop("pv_typing_for_apt", None)
+        context.user_data.pop("pv_typing_field", None)
+        
         patient = get_patient(db, user.id)
 
         if not patient:
@@ -314,6 +318,12 @@ async def confirm_slot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # parse datetime from string so it survives bot restarts
         apt_time = datetime.fromisoformat(selected["datetime_str"])
+        
+        if apt_time <= datetime.now():
+            await query.edit_message_text(
+                "⚠️ This slot is now in the past. Please send /start to pick a fresh time."
+            )
+            return
 
         # check slot not already taken
         conflict = db.query(Appointment).filter(
