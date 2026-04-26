@@ -25,9 +25,9 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="brand">
-          <div className="logo-icon">🏥</div>
+          <div className="logo-icon">CD</div>
           <h1>CareDost</h1>
-          <p>Doctor Dashboard — Sign in to continue</p>
+          <p>Doctor Dashboard - Sign in to continue</p>
         </div>
 
         {error && <div className="login-error">{error}</div>}

@@ -51,8 +51,8 @@ export default function AppointmentDetail() {
       const res = await api.saveNotes(id, { notes, medicines, follow_up: followUp });
       showToast(
         res.revisit_scheduled
-          ? '✅ Saved & revisit auto-scheduled!'
-          : '✅ Visit completed & patient notified!'
+          ? 'Saved and revisit auto-scheduled.'
+          : 'Visit completed and patient notified.'
       );
       // Refresh
       const fresh = await api.appointment(id);
@@ -68,7 +68,7 @@ export default function AppointmentDetail() {
     if (!confirm('Cancel this appointment? The patient will be notified.')) return;
     try {
       await api.cancelAppointment(id);
-      showToast('✅ Appointment cancelled');
+      showToast('Appointment cancelled.');
       const fresh = await api.appointment(id);
       setData(fresh);
     } catch (err) {
@@ -82,7 +82,7 @@ export default function AppointmentDetail() {
     setSendingMsg(true);
     try {
       await api.sendMessage(id, directMsg);
-      showToast('✅ Message sent to patient');
+      showToast('Message sent to patient.');
       setDirectMsg('');
     } catch (err) {
       showToast(err.message, true);
@@ -124,12 +124,12 @@ export default function AppointmentDetail() {
   return (
     <>
       <button className="back-link" onClick={() => navigate('/')}>
-        ← Back to Dashboard
+        Back to Dashboard
       </button>
 
       <div className="page-header">
-        <h2>Visit Notes — {patient.name}</h2>
-        <p>Appointment #{appointment.id} · {appointment.time}</p>
+        <h2>Visit Notes - {patient.name}</h2>
+        <p>Appointment #{appointment.id} - {appointment.time}</p>
       </div>
 
       <div className="two-col">
@@ -137,7 +137,7 @@ export default function AppointmentDetail() {
         <div>
           {/* Patient Info */}
           <div className="detail-card">
-            <h3>👤 Patient Information</h3>
+            <h3>Patient Information</h3>
             <div className="info-grid">
               <div className="info-item">
                 <div className="info-label">Name</div>
@@ -164,7 +164,7 @@ export default function AppointmentDetail() {
 
           {/* Pre-Visit Info */}
           <div className="detail-card previsit-card">
-            <h3>📋 Pre-Visit Questionnaire</h3>
+            <h3>Pre-Visit Questionnaire</h3>
             {pre_visit ? (
               <div className="previsit-grid">
                 <div className="previsit-item">
@@ -194,7 +194,7 @@ export default function AppointmentDetail() {
               </div>
             ) : (
               <div className="empty-state" style={{ padding: '20px 0' }}>
-                <div className="empty-icon">⏳</div>
+                <div className="empty-icon">--</div>
                 <div>Patient hasn't filled the questionnaire yet</div>
               </div>
             )}
@@ -203,13 +203,13 @@ export default function AppointmentDetail() {
           {/* Visit Notes Form */}
           <div className="detail-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ marginBottom: 0 }}>🩺 Clinical Notes</h3>
+              <h3 style={{ marginBottom: 0 }}>Clinical Notes</h3>
               <button
                 className="btn btn-ai"
                 onClick={() => handleExpand('notes')}
                 disabled={expandingNotes || !notes.trim()}
               >
-                {expandingNotes ? '✨ Expanding...' : '✨ AI Expand'}
+                {expandingNotes ? 'Expanding...' : 'AI Expand'}
               </button>
             </div>
 
@@ -234,7 +234,7 @@ export default function AppointmentDetail() {
                   onClick={() => handleExpand('medicines')}
                   disabled={expandingMeds || !medicines.trim()}
                 >
-                  {expandingMeds ? '✨ Expanding...' : '✨ AI Expand'}
+                  {expandingMeds ? 'Expanding...' : 'AI Expand'}
                 </button>
               </div>
               <div className="form-group">
@@ -261,7 +261,7 @@ export default function AppointmentDetail() {
 
               <div className="action-row">
                 <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>
-                  ← Go Back
+                  Go Back
                 </button>
                 {appointment.status === 'scheduled' && (
                   <button
@@ -270,7 +270,7 @@ export default function AppointmentDetail() {
                     className="btn btn-success"
                     disabled={saving}
                   >
-                    {saving ? 'Saving...' : '✅ Save & Mark Complete'}
+                    {saving ? 'Saving...' : 'Save and Mark Complete'}
                   </button>
                 )}
                 <a
@@ -283,7 +283,7 @@ export default function AppointmentDetail() {
                     window.open(`/appointment/${id}/prescription`, '_blank');
                   }}
                 >
-                  📄 Prescription PDF
+                  Prescription PDF
                 </a>
               </div>
 
@@ -295,7 +295,7 @@ export default function AppointmentDetail() {
                   style={{ marginTop: 12 }}
                   onClick={handleCancel}
                 >
-                  ❌ Cancel Booking & Remove from Calendar
+                  Cancel Booking and Remove from Calendar
                 </button>
               )}
             </form>
@@ -305,7 +305,7 @@ export default function AppointmentDetail() {
         {/* Right column — Chat */}
         <div>
           <div className="detail-card" style={{ borderTop: '3px solid var(--green)' }}>
-            <h3>💬 Conversation History</h3>
+            <h3>Conversation History</h3>
 
             <div className="chat-container" ref={chatRef}>
               {messages.length > 0 ? (
@@ -338,14 +338,14 @@ export default function AppointmentDetail() {
                           border: '1px solid var(--border)'
                         }}
                       >
-                        📁 View Document
+                        View Document
                       </a>
                     )}
                   </div>
                 ))
               ) : (
                 <div className="empty-state" style={{ padding: '20px 0' }}>
-                  <div style={{ fontSize: 24, opacity: 0.3, marginBottom: 8 }}>💬</div>
+                  <div style={{ fontSize: 24, opacity: 0.3, marginBottom: 8 }}>--</div>
                   <div>No message history yet</div>
                 </div>
               )}
@@ -370,7 +370,7 @@ export default function AppointmentDetail() {
                 className="btn btn-success btn-block"
                 disabled={sendingMsg || !directMsg.trim()}
               >
-                {sendingMsg ? 'Sending...' : '💬 Send Message'}
+                {sendingMsg ? 'Sending...' : 'Send Message'}
               </button>
             </form>
           </div>

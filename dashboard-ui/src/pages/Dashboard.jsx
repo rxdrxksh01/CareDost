@@ -33,7 +33,7 @@ export default function Dashboard() {
         target_date: bcastDate,
         is_cancellation: bcastCancel,
       });
-      showToast(`✅ Broadcast sent to ${res.affected} patients`);
+      showToast(`Broadcast sent to ${res.affected} patients`);
       setBcastMsg('');
       setBcastDate('');
       setBcastCancel(false);
@@ -61,32 +61,32 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card cyan">
-          <div className="stat-icon">📅</div>
+          <div className="stat-icon">TD</div>
           <div className="stat-value">{stats.today_count}</div>
           <div className="stat-label">Today's Appointments</div>
         </div>
         <div className="stat-card accent">
-          <div className="stat-icon">👥</div>
+          <div className="stat-icon">PT</div>
           <div className="stat-value">{stats.total_patients}</div>
           <div className="stat-label">Total Patients</div>
         </div>
         <div className="stat-card blue">
-          <div className="stat-icon">🗓</div>
+          <div className="stat-icon">AP</div>
           <div className="stat-value">{stats.total_appointments}</div>
           <div className="stat-label">Total Appointments</div>
         </div>
         <div className="stat-card green">
-          <div className="stat-icon">✅</div>
+          <div className="stat-icon">OK</div>
           <div className="stat-value">{stats.completed}</div>
           <div className="stat-label">Completed Visits</div>
         </div>
         <div className="stat-card pink">
-          <div className="stat-icon">💊</div>
+          <div className="stat-icon">RX</div>
           <div className="stat-value">{stats.active_reminders}</div>
           <div className="stat-label">Active Reminders</div>
         </div>
         <div className="stat-card amber">
-          <div className="stat-icon">❌</div>
+          <div className="stat-icon">CN</div>
           <div className="stat-value">{stats.cancelled}</div>
           <div className="stat-label">Cancelled</div>
         </div>
@@ -98,7 +98,7 @@ export default function Dashboard() {
           {/* Today's Appointments */}
           <div className="section">
             <div className="section-header">
-              <h3>📅 Today's Appointments</h3>
+              <h3>Today's Appointments</h3>
               {today.length > 0 && <span className="count">{today.length}</span>}
             </div>
             {today.length > 0 ? (
@@ -123,14 +123,14 @@ export default function Dashboard() {
                       className="btn btn-primary"
                       onClick={(e) => { e.stopPropagation(); navigate(`/appointment/${apt.id}`); }}
                     >
-                      📝 Notes
+                      Notes
                     </button>
                   </div>
                 </div>
               ))
             ) : (
               <div className="empty-state">
-                <div className="empty-icon">📭</div>
+                <div className="empty-icon">--</div>
                 <div>No appointments scheduled for today</div>
               </div>
             )}
@@ -140,7 +140,7 @@ export default function Dashboard() {
           {recent_completed.length > 0 && (
             <div className="section">
               <div className="section-header">
-                <h3>✅ Recently Completed</h3>
+                <h3>Recently Completed</h3>
               </div>
               {recent_completed.map(apt => (
                 <div
@@ -169,7 +169,7 @@ export default function Dashboard() {
           {/* Upcoming */}
           <div className="section">
             <div className="section-header">
-              <h3>🗓 Upcoming</h3>
+              <h3>Upcoming</h3>
               {upcoming.length > 0 && <span className="count">{upcoming.length}</span>}
             </div>
             {upcoming.length > 0 ? (
@@ -193,7 +193,7 @@ export default function Dashboard() {
               ))
             ) : (
               <div className="empty-state">
-                <div className="empty-icon">🗓</div>
+                <div className="empty-icon">--</div>
                 <div>No upcoming appointments</div>
               </div>
             )}
@@ -201,7 +201,7 @@ export default function Dashboard() {
 
           {/* Broadcast */}
           <div className="section broadcast-section" style={{ borderRadius: 'var(--radius)' }}>
-            <div className="broadcast-header">📢 Broadcast Announcement</div>
+            <div className="broadcast-header">Broadcast Announcement</div>
             <form onSubmit={handleBroadcast} style={{ padding: 20 }}>
               <div className="form-group">
                 <label className="form-label">Target Date</label>
@@ -234,7 +234,7 @@ export default function Dashboard() {
                   onChange={(e) => setBcastCancel(e.target.checked)}
                 />
                 <label htmlFor="broadcast-cancel">
-                  🚨 Mass Cancellation — Cancel all slots & remove from calendar
+                  Mass Cancellation - Cancel all slots and remove from calendar
                 </label>
               </div>
               <button
@@ -244,7 +244,7 @@ export default function Dashboard() {
                 disabled={bcastLoading}
                 style={{ marginTop: 8 }}
               >
-                {bcastLoading ? 'Sending...' : '📢 Send Broadcast'}
+                {bcastLoading ? 'Sending...' : 'Send Broadcast'}
               </button>
             </form>
           </div>

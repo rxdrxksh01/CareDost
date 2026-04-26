@@ -15,7 +15,7 @@ export default function Layout({ children }) {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <h1>
-            <span className="icon">🏥</span>
+            <span className="icon">CD</span>
             CareDost
           </h1>
           <p>Clinic Management</p>
@@ -27,7 +27,7 @@ export default function Layout({ children }) {
             end
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <span className="nav-icon">📊</span>
+            <span className="nav-icon">DB</span>
             Dashboard
           </NavLink>
 
@@ -35,13 +35,13 @@ export default function Layout({ children }) {
             to="/patients"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <span className="nav-icon">👥</span>
+            <span className="nav-icon">PT</span>
             Patients
           </NavLink>
 
           {location.pathname.startsWith('/appointment') && (
             <div className="nav-item active">
-              <span className="nav-icon">📋</span>
+              <span className="nav-icon">VN</span>
               Visit Notes
             </div>
           )}
@@ -60,7 +60,7 @@ export default function Layout({ children }) {
             onClick={logout}
             style={{ marginTop: 8, color: 'var(--red)' }}
           >
-            <span className="nav-icon">🚪</span>
+            <span className="nav-icon">SO</span>
             Sign Out
           </button>
         </div>

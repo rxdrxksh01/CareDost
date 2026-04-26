@@ -41,7 +41,7 @@ export default function Patients() {
 
       <div className="section">
         <div className="section-header">
-          <h3>👥 Patient Records</h3>
+          <h3>Patient Records</h3>
           <span className="count">{filtered.length}</span>
         </div>
 
@@ -103,7 +103,7 @@ export default function Patients() {
           </div>
         ) : (
           <div className="empty-state">
-            <div className="empty-icon">👥</div>
+            <div className="empty-icon">--</div>
             <div>No patients found</div>
           </div>
         )}
