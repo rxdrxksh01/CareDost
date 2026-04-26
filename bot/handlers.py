@@ -500,40 +500,11 @@ async def patient_reply_handler(update: Update, context: ContextTypes.DEFAULT_TY
         from bot.pre_visit import pv_free_text_handler
         return await pv_free_text_handler(update, context)
 
-    text = update.message.text.strip()
-    telegram_id = str(update.effective_user.id)
-    
-    from db.database import SessionLocal
-    from db.models import Patient
-    
-    db = SessionLocal()
-    try:
-        patient = db.query(Patient).filter(Patient.telegram_id == telegram_id).first()
-        
-        if patient:
-            # Use helper to check credits
-            if not await check_patient_credits(update, patient, db):
-                return
-
-            from db.models import PatientMessage
-            # Save the message
-            new_msg = PatientMessage(
-                patient_id=patient.id,
-                message=text,
-                direction="from_patient"
-            )
-            db.add(new_msg)
-            db.commit()
-            
-            await update.message.reply_text("Thanks! I've forwarded your message to Dr. Sharma. 🙏")
-        else:
-            # If unknown user, just give start prompt
-            await update.message.reply_text("Welcome to CareDost! Please type /start to book an appointment.")
-            
-    except Exception as e:
-        logger.error(f"Error in patient_reply_handler: {e}")
-    finally:
-        db.close()
+    # Keep bot simple: patients cannot send free-form messages.
+    await update.message.reply_text(
+        "Direct patient messaging is disabled.\n\n"
+        "Please use the buttons to book/manage appointments."
+    )
 
 async def check_patient_credits(update: Update, patient, db):
     """Helper to check and deduct credits. Returns True if allowed, False otherwise."""
@@ -564,69 +535,7 @@ async def patient_media_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if context.user_data.get("pv_typing_for_apt"):
         return
 
-    telegram_id = str(update.effective_user.id)
-    from db.database import SessionLocal
-    from db.models import Patient, PatientMessage
-    import os
-    import uuid
-
-    db = SessionLocal()
-    try:
-        patient = db.query(Patient).filter(Patient.telegram_id == telegram_id).first()
-        if not patient: return
-
-        if not await check_patient_credits(update, patient, db):
-            return
-
-        file_id = None
-        is_image = False
-        extension = ""
-
-        if update.message.photo:
-            file_id = update.message.photo[-1].file_id  # Best quality
-            is_image = True
-            extension = ".jpg"
-        elif update.message.document:
-            file_id = update.message.document.file_id
-            # Check mime type for image
-            mime = update.message.document.mime_type or ""
-            is_image = mime.startswith("image/")
-            # keep original extension
-            orig_name = update.message.document.file_name or "file"
-            extension = os.path.splitext(orig_name)[1] or ".doc"
-            
-        if not file_id:
-            return
-
-        # Prepare folder
-        static_dir = "dashboard/static/uploads"
-        if not os.path.exists(static_dir):
-            os.makedirs(static_dir, exist_ok=True)
-
-        new_name = f"{uuid.uuid4()}{extension}"
-        file_path = f"uploads/{new_name}"
-        full_path = os.path.join(static_dir, new_name)
-
-        # Download
-        tg_file = await context.bot.get_file(file_id)
-        await tg_file.download_to_drive(full_path)
-
-        # Save to DB
-        caption = update.message.caption or ""
-        new_msg = PatientMessage(
-            patient_id=patient.id,
-            message=caption,
-            file_path=file_path,
-            is_image=is_image,
-            direction="from_patient"
-        )
-        db.add(new_msg)
-        db.commit()
-
-        await update.message.reply_text("📎 I've shared your file with the doctor. They'll review it during your visit!")
-    except Exception as e:
-        import logging
-        logging.error(f"Media handler error: {e}")
-        await update.message.reply_text("Sorry, I had trouble saving that file. Please try again.")
-    finally:
-        db.close()
+    await update.message.reply_text(
+        "Patient file uploads are disabled.\n\n"
+        "Please share details during your booked appointment."
+    )

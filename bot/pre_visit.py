@@ -314,8 +314,8 @@ async def pv_submit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if not problem_val and existing:
                 problem_val = existing.main_problem or ""
             if not problem_val:
-                await query.edit_message_text("Session expired. We couldn't save your form. Please provide these details directly at the clinic.")
-                return
+                # Keep flow resilient even if context was lost.
+                problem_val = "Not provided"
 
             duration_val = context.user_data.get(f"pv_{apt_id}_duration", "") or (existing.duration if existing else "")
             severity_val = context.user_data.get(f"pv_{apt_id}_severity", "") or (existing.severity if existing else "")
