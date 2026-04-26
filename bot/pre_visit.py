@@ -11,6 +11,24 @@ from bot.keyboards import (
 
 logger = logging.getLogger(__name__)
 
+
+def save_previsit_draft(apt_id, **fields):
+    """Persist partial questionnaire answers to avoid session-loss issues."""
+    db = SessionLocal()
+    try:
+        form = db.query(PreVisitForm).filter(PreVisitForm.appointment_id == apt_id).first()
+        if not form:
+            form = PreVisitForm(appointment_id=apt_id)
+            db.add(form)
+        for key, val in fields.items():
+            setattr(form, key, val)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed saving pre-visit draft for {apt_id}: {e}")
+    finally:
+        db.close()
+
 # ── send initial questionnaire message ────────────────────
 async def send_pre_visit_questionnaire(bot, appointment_id):
     db = SessionLocal()
@@ -55,6 +73,20 @@ def generate_review_text(apt_id, context):
     sev = context.user_data.get(f"pv_{apt_id}_severity", "")
     med = context.user_data.get(f"pv_{apt_id}_medicine", "")
     notes = context.user_data.get(f"pv_{apt_id}_notes", "")
+
+    # Fallback to persisted draft if process restarted mid-questionnaire.
+    if not all([prob, dur, sev, med]):
+        db = SessionLocal()
+        try:
+            form = db.query(PreVisitForm).filter(PreVisitForm.appointment_id == apt_id).first()
+            if form:
+                prob = prob or (form.main_problem or "")
+                dur = dur or (form.duration or "")
+                sev = sev or (form.severity or "")
+                med = med or (form.taking_medicine or "")
+                notes = notes or (form.extra_notes or "")
+        finally:
+            db.close()
     
     text = "Please review your answers before submitting:\n\n"
     text += f"Problem: {prob}\n"
@@ -92,6 +124,7 @@ async def pv_problem_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     try:
         apt_id, answer = parse_pv_callback(query.data, "pv_prob_")
         context.user_data[f"pv_{apt_id}_problem"] = answer
+        save_previsit_draft(apt_id, main_problem=answer)
 
         await query.edit_message_text(
             f"Main problem: {answer}\n\n"
@@ -112,6 +145,7 @@ async def pv_duration_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         apt_id, answer = parse_pv_callback(query.data, "pv_dur_")
         context.user_data[f"pv_{apt_id}_duration"] = answer
+        save_previsit_draft(apt_id, duration=answer)
 
         await query.edit_message_text(
             f"Duration: {answer}\n\n"
@@ -132,6 +166,7 @@ async def pv_severity_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         apt_id, answer = parse_pv_callback(query.data, "pv_sev_")
         context.user_data[f"pv_{apt_id}_severity"] = answer
+        save_previsit_draft(apt_id, severity=answer)
 
         await query.edit_message_text(
             f"Severity: {answer}\n\n"
@@ -152,6 +187,7 @@ async def pv_medicine_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         apt_id, answer = parse_pv_callback(query.data, "pv_med_")
         context.user_data[f"pv_{apt_id}_medicine"] = answer
+        save_previsit_draft(apt_id, taking_medicine=answer)
 
         # Store apt_id so the free-text handler knows which appointment it's collecting notes for
         context.user_data["pv_typing_for_apt"] = apt_id
@@ -180,6 +216,7 @@ async def pv_skip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("pv_typing_for_apt", None)
         context.user_data.pop("pv_typing_field", None)
         context.user_data[f"pv_{apt_id}_notes"] = "Skipped"
+        save_previsit_draft(apt_id, extra_notes="Skipped")
 
         review_text = generate_review_text(apt_id, context)
         await query.edit_message_text(
@@ -204,6 +241,7 @@ async def pv_free_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data.pop("pv_typing_for_apt", None)
         context.user_data.pop("pv_typing_field", None)
         context.user_data[f"pv_{apt_id}_notes"] = answer
+        save_previsit_draft(apt_id, extra_notes=answer)
 
         review_text = generate_review_text(apt_id, context)
         await update.message.reply_text(
@@ -213,6 +251,7 @@ async def pv_free_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     elif field == "problem":
         context.user_data[f"pv_{apt_id}_problem"] = answer
+        save_previsit_draft(apt_id, main_problem=answer)
         context.user_data.pop("pv_typing_field", None) # clear field but keep going
         
         await update.message.reply_text(
@@ -223,6 +262,7 @@ async def pv_free_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         
     elif field == "duration":
         context.user_data[f"pv_{apt_id}_duration"] = answer
+        save_previsit_draft(apt_id, duration=answer)
         context.user_data.pop("pv_typing_field", None)
         
         await update.message.reply_text(
@@ -233,6 +273,7 @@ async def pv_free_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         
     elif field == "severity":
         context.user_data[f"pv_{apt_id}_severity"] = answer
+        save_previsit_draft(apt_id, severity=answer)
         context.user_data.pop("pv_typing_field", None)
         
         await update.message.reply_text(
@@ -243,6 +284,7 @@ async def pv_free_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         
     elif field == "medicine":
         context.user_data[f"pv_{apt_id}_medicine"] = answer
+        save_previsit_draft(apt_id, taking_medicine=answer)
         context.user_data["pv_typing_field"] = "notes" # next field is notes
         
         await update.message.reply_text(
@@ -267,26 +309,27 @@ async def pv_submit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         db = SessionLocal()
         try:
             existing = db.query(PreVisitForm).filter(PreVisitForm.appointment_id == apt_id).first()
-            if existing:
-                await query.edit_message_text("You've already submitted your pre-visit form. Thank you!")
-                return
             
             problem_val = context.user_data.get(f"pv_{apt_id}_problem", "")
+            if not problem_val and existing:
+                problem_val = existing.main_problem or ""
             if not problem_val:
                 await query.edit_message_text("Session expired. We couldn't save your form. Please provide these details directly at the clinic.")
                 return
 
-            form = PreVisitForm(
-                appointment_id=apt_id,
-                main_problem=problem_val,
-                duration=context.user_data.get(f"pv_{apt_id}_duration", ""),
-                severity=context.user_data.get(f"pv_{apt_id}_severity", ""),
-                taking_medicine=context.user_data.get(f"pv_{apt_id}_medicine", ""),
-                extra_notes=context.user_data.get(f"pv_{apt_id}_notes", "")
-            )
+            duration_val = context.user_data.get(f"pv_{apt_id}_duration", "") or (existing.duration if existing else "")
+            severity_val = context.user_data.get(f"pv_{apt_id}_severity", "") or (existing.severity if existing else "")
+            medicine_val = context.user_data.get(f"pv_{apt_id}_medicine", "") or (existing.taking_medicine if existing else "")
+            notes_val = context.user_data.get(f"pv_{apt_id}_notes", "") or (existing.extra_notes if existing else "")
+            form = existing or PreVisitForm(appointment_id=apt_id)
+            form.main_problem = problem_val
+            form.duration = duration_val
+            form.severity = severity_val
+            form.taking_medicine = medicine_val
+            form.extra_notes = notes_val
             from db.models import Patient, Appointment
             apt = db.query(Appointment).filter(Appointment.id == apt_id).first()
-            patient = db.query(Patient).filter(Patient.id == apt.patient_id).first()
+            patient = db.query(Patient).filter(Patient.id == apt.patient_id).first() if apt else None
             if patient:
                 patient.initiation_credits = 1
                 patient.reply_credits = 0  # reset reply credits on new visit form

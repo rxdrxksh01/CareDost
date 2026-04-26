@@ -3,7 +3,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from bot.keyboards import main_menu, time_slots, confirm_booking
 from db.database import SessionLocal
 from db.models import Patient, Doctor, Appointment
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 logging.basicConfig(
@@ -11,6 +11,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 ASK_NAME, ASK_PHONE, PICK_SLOT, CONFIRM_SLOT = range(4)
 
@@ -50,6 +51,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         patient = get_patient(db, user.id)
 
         if not patient:
+            context.user_data["onboarding"] = True
             await update.message.reply_text(
                 "👋 Welcome to *CareDost*!\n\n"
                 "I'm your personal clinic assistant.\n\n"
@@ -58,6 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return ASK_NAME
 
+        context.user_data.pop("onboarding", None)
         await update.message.reply_text(
             f"👋 Welcome back, *{patient.name}*!\n\nHow can I help you today?",
             parse_mode="Markdown",
@@ -77,6 +80,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── collect name ──────────────────────────────────────────
 async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
+        context.user_data["onboarding"] = True
         name = update.message.text.strip()
         if len(name) < 2:
             await update.message.reply_text(
@@ -112,6 +116,7 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # check if already registered
         existing = get_patient(db, user.id)
         if existing:
+            context.user_data.pop("onboarding", None)
             await update.message.reply_text(
                 "✅ You're already registered!\n\nHow can I help you today?",
                 reply_markup=main_menu()
@@ -125,6 +130,7 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         db.add(patient)
         db.commit()
+        context.user_data.pop("onboarding", None)
 
         await update.message.reply_text(
             "✅ You're registered!\n\nHow can I help you today?",
@@ -175,7 +181,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 appointments = db.query(Appointment).filter(
                     Appointment.patient_id == patient.id,
                     Appointment.status == "scheduled",
-                    Appointment.appointment_time >= datetime.now()
+                    Appointment.appointment_time >= datetime.now(IST).replace(tzinfo=None)
                 ).order_by(Appointment.appointment_time).all()
 
                 if not appointments:
@@ -273,11 +279,12 @@ async def slot_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "time": selected["time"],
             "datetime_str": selected["datetime"].isoformat()
         }
+        slot_token = selected["datetime"].strftime("%Y%m%d%H%M")
 
         await query.edit_message_text(
             f"You selected *{selected['time']}*\n\nConfirm your booking?",
             parse_mode="Markdown",
-            reply_markup=confirm_booking(slot_id)
+            reply_markup=confirm_booking(slot_token)
         )
 
     except Exception as e:
@@ -310,16 +317,27 @@ async def confirm_slot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         selected = context.user_data.get("selected_slot")
-        if not selected:
+        apt_time = None
+        display_time = None
+
+        # Primary path: parse time from callback payload so we survive restarts.
+        if query.data.startswith("confirm_"):
+            raw = query.data.replace("confirm_", "", 1).strip()
+            if raw.isdigit() and len(raw) == 12:
+                apt_time = datetime.strptime(raw, "%Y%m%d%H%M")
+
+        # Fallback path: use in-memory selected slot if available.
+        if apt_time is None and selected:
+            apt_time = datetime.fromisoformat(selected["datetime_str"])
+            display_time = selected["time"]
+
+        if apt_time is None:
             await query.edit_message_text(
                 "Session expired. Please send /start and book again."
             )
             return
-
-        # parse datetime from string so it survives bot restarts
-        apt_time = datetime.fromisoformat(selected["datetime_str"])
         
-        if apt_time <= datetime.now():
+        if apt_time <= datetime.now(IST).replace(tzinfo=None):
             await query.edit_message_text(
                 "⚠️ This slot is now in the past. Please send /start to pick a fresh time."
             )
@@ -359,7 +377,7 @@ async def confirm_slot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.edit_message_text(
             f"✅ *Booking Confirmed!*\n\n"
-            f"📅 {selected['time']}\n"
+            f"📅 {display_time or apt_time.strftime('%d %b, %I:%M %p')}\n"
             f"👨‍⚕️ Doctor: {doctor_name}\n\n"
             f"I'll remind you 2 hours before. 🔔",
             parse_mode="Markdown"
@@ -422,7 +440,7 @@ def get_available_slots():
 
 def get_default_slots():
     slots = []
-    now = datetime.now()
+    now = datetime.now(IST).replace(tzinfo=None)
     db = SessionLocal()
 
     try:
@@ -436,10 +454,13 @@ def get_default_slots():
     finally:
         db.close()
 
-    for day_offset in range(2):
+    for day_offset in range(3):
         base = (now + timedelta(days=day_offset)).replace(
             minute=0, second=0, microsecond=0
         )
+        # Start from tomorrow to keep slots predictable.
+        if day_offset == 0:
+            continue
         for hour in range(16, 19):
             slot_time = base.replace(hour=hour)
             if slot_time <= now:
@@ -468,6 +489,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def patient_reply_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # This handler catches any text not caught by Pre-Visit or ConversationHandler
     if not update.message or not update.message.text:
+        return
+    
+    # Ignore onboarding steps (/start name/phone flow).
+    if context.user_data.get("onboarding"):
         return
 
     # Check if we are in Pre-Visit mode - if so, delegate to the pre-visit handler
@@ -529,6 +554,10 @@ async def check_patient_credits(update: Update, patient, db):
 async def patient_media_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles photos and documents sent by the patient."""
     if not update.message:
+        return
+    
+    # Ignore uploads during onboarding flow.
+    if context.user_data.get("onboarding"):
         return
         
     # Ignore if in Pre-Visit questionnaire typing mode

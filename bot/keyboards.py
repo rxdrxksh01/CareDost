@@ -20,9 +20,9 @@ def time_slots(slots):
     keyboard.append([InlineKeyboardButton("Cancel", callback_data="cancel")])
     return InlineKeyboardMarkup(keyboard)
 
-def confirm_booking(slot_id):
+def confirm_booking(slot_epoch):
     keyboard = [
-        [InlineKeyboardButton("Confirm", callback_data=f"confirm_{slot_id}")],
+        [InlineKeyboardButton("Confirm", callback_data=f"confirm_{slot_epoch}")],
         [InlineKeyboardButton("Cancel", callback_data="cancel")]
     ]
     return InlineKeyboardMarkup(keyboard)

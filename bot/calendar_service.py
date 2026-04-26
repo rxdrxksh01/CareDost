@@ -76,10 +76,11 @@ def get_busy_times(date: datetime):
 
 def get_available_slots_from_calendar(days_ahead=2):
     slots = []
-    now = datetime.now()
+    now = datetime.now(IST).replace(tzinfo=None)
 
     for day_offset in range(days_ahead):
-        date = now + timedelta(days=day_offset)
+        # Start from tomorrow to avoid near-time confusion for patients.
+        date = now + timedelta(days=day_offset + 1)
         busy_periods = get_busy_times(date)
         day_slots = 0
 

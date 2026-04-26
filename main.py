@@ -81,9 +81,10 @@ def main():
     # free-text handler for pre-visit notes and patient messages
     from bot.handlers import patient_reply_handler, patient_media_handler
     
-    # Put patient replies and media in the default group so they only fire if conversation handler doesn't catch them
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, patient_reply_handler))
-    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, patient_media_handler))
+    # Put generic patient message handlers in a later group to avoid colliding
+    # with onboarding conversation handlers.
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, patient_reply_handler), group=1)
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, patient_media_handler), group=1)
 
     print("🚀 CareDost bot is running...")
     app.run_polling()
