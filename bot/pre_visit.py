@@ -333,11 +333,6 @@ async def pv_submit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             form.severity = severity_val
             form.taking_medicine = medicine_val
             form.extra_notes = notes_val
-            from db.models import Patient, Appointment
-            patient = db.query(Patient).filter(Patient.id == apt.patient_id).first() if apt else None
-            if patient:
-                patient.initiation_credits = 1
-                patient.reply_credits = 0  # reset reply credits on new visit form
 
             db.add(form)
             db.commit()
