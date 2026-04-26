@@ -329,6 +329,13 @@ async def confirm_slot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raw = query.data.replace("confirm_", "", 1).strip()
             if raw.isdigit() and len(raw) == 12:
                 apt_time = datetime.strptime(raw, "%Y%m%d%H%M")
+            elif raw.isdigit():
+                # Backward compatibility with old callback format (confirm_<slot_id>).
+                legacy_slots = get_available_slots()
+                legacy_selected = next((s for s in legacy_slots if str(s["id"]) == raw), None)
+                if legacy_selected:
+                    apt_time = legacy_selected["datetime"]
+                    display_time = legacy_selected["time"]
 
         # Fallback path: use in-memory selected slot if available.
         if apt_time is None and selected:
@@ -337,7 +344,7 @@ async def confirm_slot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if apt_time is None:
             await query.edit_message_text(
-                "Session expired. Please send /start and book again."
+                "This booking link is old. Please send /start and pick a fresh slot."
             )
             return
         

@@ -309,6 +309,12 @@ async def pv_submit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         db = SessionLocal()
         try:
             existing = db.query(PreVisitForm).filter(PreVisitForm.appointment_id == apt_id).first()
+            apt = db.query(Appointment).filter(Appointment.id == apt_id).first()
+            if not apt:
+                await query.edit_message_text(
+                    "This form is no longer active. Please book again with /start."
+                )
+                return
             
             problem_val = context.user_data.get(f"pv_{apt_id}_problem", "")
             if not problem_val and existing:
@@ -328,7 +334,6 @@ async def pv_submit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             form.taking_medicine = medicine_val
             form.extra_notes = notes_val
             from db.models import Patient, Appointment
-            apt = db.query(Appointment).filter(Appointment.id == apt_id).first()
             patient = db.query(Patient).filter(Patient.id == apt.patient_id).first() if apt else None
             if patient:
                 patient.initiation_credits = 1
@@ -353,6 +358,12 @@ async def pv_submit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
     except Exception as e:
         logger.error(f"Error in pv_submit_callback: {e}")
+        try:
+            await query.edit_message_text(
+                "Couldn't submit right now. Tap Submit again in a few seconds."
+            )
+        except Exception:
+            pass
 
 async def pv_redo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
