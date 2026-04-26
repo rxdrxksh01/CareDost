@@ -5,11 +5,12 @@ All endpoints return JSON. Auth via Flask session cookies.
 from flask import Blueprint, request, jsonify, session, make_response
 from db.database import SessionLocal
 from db.models import Doctor, Patient, Appointment, VisitSummary, MedicationReminder, PreVisitForm, PatientMessage
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 import os, logging
 
 logger = logging.getLogger(__name__)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
@@ -52,18 +53,22 @@ def api_me():
 @api_login_required
 def api_dashboard():
     db = SessionLocal()
-    now = datetime.now()
+    now = datetime.now(IST).replace(tzinfo=None)
     try:
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
         today_apts = db.query(Appointment).filter(
-            Appointment.appointment_time >= now.replace(hour=0, minute=0, second=0),
-            Appointment.appointment_time <= now.replace(hour=23, minute=59, second=59),
+            Appointment.appointment_time >= day_start,
+            Appointment.appointment_time <= day_end,
             Appointment.status == "scheduled"
         ).order_by(Appointment.appointment_time).all()
 
+        # Show all future scheduled patients (including later today) with no hard limit.
         upcoming_apts = db.query(Appointment).filter(
-            Appointment.appointment_time > now.replace(hour=23, minute=59, second=59),
+            Appointment.appointment_time >= now,
             Appointment.status == "scheduled"
-        ).order_by(Appointment.appointment_time).limit(10).all()
+        ).order_by(Appointment.appointment_time).all()
 
         recent_completed = db.query(Appointment).filter(
             Appointment.status == "completed"
