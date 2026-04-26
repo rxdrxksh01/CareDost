@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: caredost-clinic-bot
+    env: python
+    buildCommand: "pip install -r requirements.txt && npm --prefix dashboard-ui install && npm --prefix dashboard-ui run build"
+    startCommand: "bash start.sh"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DASHBOARD_USERNAME
+        value: doctor
+      - key: DASHBOARD_PASSWORD
+        value: caredost123
+      - key: SECRET_KEY
+        generateValue: true

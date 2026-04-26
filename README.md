@@ -98,6 +98,19 @@ python main.py
 python -m dashboard.app
 ```
 
+### 4. Quick Deploy on Render (Simple)
+1. Push this repo to GitHub.
+2. In Render, create a new **Blueprint** service from the repo (it uses `render.yaml`).
+3. Add env vars:
+   - `TELEGRAM_BOT_TOKEN`
+   - `GROQ_API_KEY`
+   - `SECRET_KEY` (any strong random string)
+   - `DATABASE_URL` (use Render Postgres URL in production)
+4. Deploy.
+
+Health check URL after deploy:
+`https://<your-service>.onrender.com/health`
+
 ---
 
 ## 🛡️ Security & Privacy
