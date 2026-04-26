@@ -117,6 +117,8 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         existing = get_patient(db, user.id)
         if existing:
             context.user_data.pop("onboarding", None)
+            # Prevent generic text handler from reacting to onboarding input.
+            context.user_data["suppress_next_text"] = True
             await update.message.reply_text(
                 "✅ You're already registered!\n\nHow can I help you today?",
                 reply_markup=main_menu()
@@ -131,6 +133,8 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.add(patient)
         db.commit()
         context.user_data.pop("onboarding", None)
+        # Prevent generic text handler from reacting to onboarding input.
+        context.user_data["suppress_next_text"] = True
 
         await update.message.reply_text(
             "✅ You're registered!\n\nHow can I help you today?",
@@ -493,6 +497,10 @@ async def patient_reply_handler(update: Update, context: ContextTypes.DEFAULT_TY
     
     # Ignore onboarding steps (/start name/phone flow).
     if context.user_data.get("onboarding"):
+        return
+    
+    # Ignore one follow-up text event after successful onboarding.
+    if context.user_data.pop("suppress_next_text", False):
         return
 
     # Check if we are in Pre-Visit mode - if so, delegate to the pre-visit handler
